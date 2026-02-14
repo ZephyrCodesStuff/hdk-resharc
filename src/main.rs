@@ -10,7 +10,7 @@ use hdk_archive::archive::ArchiveReader;
 use hdk_archive::bar::BarReader;
 use hdk_archive::sharc::reader::SharcReader;
 use hdk_archive::sharc::writer::SharcWriter;
-use hdk_archive::structs::{ARCHIVE_MAGIC, CompressionType, Endianness};
+use hdk_archive::structs::{ARCHIVE_MAGIC, ArchiveFlags, CompressionType, Endianness};
 use hdk_sdat::{SdatKeys, SdatReader, SdatWriter};
 use hdk_secure::hash::AfsHash;
 
@@ -325,7 +325,9 @@ fn extract_archive_to_dir(
 
 fn repack_to_sharc(extracted: &[ExtractedEntry], endianness: Endianness) -> Result<(Vec<u8>, i32)> {
     let mut out = Cursor::new(Vec::<u8>::new());
-    let mut w = SharcWriter::new(&mut out, SHARC_SDAT_KEY, endianness).context("create SHARC")?;
+    let mut w = SharcWriter::new(&mut out, SHARC_SDAT_KEY, endianness)
+        .context("create SHARC")?
+        .with_flags(ArchiveFlags::Protected.into());
 
     for entry in extracted {
         if BAD_FILES.contains(&entry.name_hash) {
