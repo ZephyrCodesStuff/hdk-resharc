@@ -1,0 +1,12 @@
+[package]
+name = "sdat-normalizer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+hdk-archive = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
+hdk-sdat = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
+hdk-secure = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
+anyhow = "1.0"
+tempfile = "3.10"
+chrono = "0.4.43"
