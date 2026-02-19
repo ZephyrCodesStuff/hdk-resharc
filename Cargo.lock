@@ -120,9 +120,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.19.1"
+version = "3.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
+checksum = "5d20789868f4b01b2f2caec9f5c4e0213b41e3e5702a50157d699ae31ced2fcb"
 
 [[package]]
 name = "bytemuck"
@@ -473,7 +473,7 @@ checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 [[package]]
 name = "hdk-archive"
 version = "0.1.0"
-source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#8c7e908b2a80e96806f2d6acbdb71c0e096df869"
+source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#051c8a4216d3df4de06137a71356de688cccf203"
 dependencies = [
  "aes",
  "binrw",
@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "hdk-comp"
 version = "0.1.0"
-source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#8c7e908b2a80e96806f2d6acbdb71c0e096df869"
+source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#051c8a4216d3df4de06137a71356de688cccf203"
 dependencies = [
  "byteorder",
  "flate2",
@@ -501,9 +501,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hdk-resharc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hdk-archive",
+ "hdk-sdat",
+ "hdk-secure",
+ "tempfile",
+]
+
+[[package]]
 name = "hdk-sdat"
 version = "0.1.0"
-source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#8c7e908b2a80e96806f2d6acbdb71c0e096df869"
+source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#051c8a4216d3df4de06137a71356de688cccf203"
 dependencies = [
  "aes",
  "binrw",
@@ -516,7 +528,7 @@ dependencies = [
 [[package]]
 name = "hdk-secure"
 version = "0.1.0"
-source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#8c7e908b2a80e96806f2d6acbdb71c0e096df869"
+source = "git+https://github.com/ZephyrCodesStuff/hdk-rs#051c8a4216d3df4de06137a71356de688cccf203"
 dependencies = [
  "byteorder",
  "cbc",
@@ -524,6 +536,7 @@ dependencies = [
  "crc16",
  "ctr",
  "ecb",
+ "hex",
  "rand",
  "uuid",
 ]
@@ -533,6 +546,12 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "iana-time-zone"
@@ -828,18 +847,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sdat-normalizer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "hdk-archive",
- "hdk-sdat",
- "hdk-secure",
- "tempfile",
-]
-
-[[package]]
 name = "semver"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -924,9 +931,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "syn"
-version = "2.0.115"
+version = "2.0.116"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e614ed320ac28113fa64972c4262d5dbc89deacdfd00c34a3e4cea073243c12"
+checksum = "3df424c70518695237746f84cede799c9c58fcb37450d7b23716568cc8bc69cb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -989,9 +996,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.8+spec-1.1.0"
+version = "1.0.9+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0742ff5ff03ea7e67c8ae6c93cac239e0d9784833362da3f9a9c1da8dfefcbdc"
+checksum = "702d4415e08923e7e1ef96cd5727c0dfed80b4d2fa25db9647fe5eb6f7c5a4c4"
 dependencies = [
  "winnow",
 ]
@@ -1004,9 +1011,9 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.23"
+version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "537dd038a89878be9b64dd4bd1b260315c1bb94f4d784956b81e27a088d9a09e"
+checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
 name = "unicode-xid"
