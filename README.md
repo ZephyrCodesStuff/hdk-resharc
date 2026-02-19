@@ -7,6 +7,7 @@
   </p>
 
   <p>
+    <a href="https://github.com/ZephyrCodesStuff/hdk-resharc/actions"><img src="https://img.shields.io/github/actions/workflow/status/ZephyrCodesStuff/hdk-resharc/clippy.yml?branch=main&style=flat-square" alt="Build Status"></a>
     <a href="#license"><img src="https://img.shields.io/badge/license-AGPLv3-blue?style=flat-square" alt="License"></a>
   </p>
 
