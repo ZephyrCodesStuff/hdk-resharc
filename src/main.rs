@@ -146,12 +146,13 @@ fn normalize_one(input_sdat_path: &Path, sdat_keys: &SdatKeys) -> Result<()> {
     let extract_root = temp.path().join("extracted");
     fs::create_dir_all(&extract_root).context("create extracted dir")?;
 
-    let extracted = extract_archive_to_dir(&archive_bytes, archive_kind, endianness, &extract_root)
-        .context("extract archive")?;
+    let mut extracted =
+        extract_archive_to_dir(&archive_bytes, archive_kind, endianness, &extract_root)
+            .context("extract archive")?;
 
     // 4) Repack extracted files into a SHARC archive
     let (sharc_bytes, sharc_timestamp) =
-        repack_to_sharc(&extracted, Endianness::Big).context("repack to SHARC")?;
+        repack_to_sharc(&mut extracted, Endianness::Big).context("repack to SHARC")?;
 
     // 5) Repack SHARC -> SDAT
     let output_name = input_sdat_path
@@ -166,8 +167,8 @@ fn normalize_one(input_sdat_path: &Path, sdat_keys: &SdatKeys) -> Result<()> {
         .with_context(|| format!("write {}", output_path.display()))?;
 
     let txt_path = normalized_txt_path(input_sdat_path);
-    let ts_bytes = timestamp_bytes(sharc_timestamp, endianness);
-    let txt = ts_bytes
+    let txt = sharc_timestamp
+        .to_be_bytes()
         .iter()
         .map(|b| format!("{:02X}", b))
         .collect::<Vec<_>>()
@@ -199,14 +200,6 @@ fn normalized_txt_path(input: &Path) -> PathBuf {
         .and_then(|s| s.to_str())
         .unwrap_or("output");
     parent.join(format!("{stem}.normalized.txt"))
-}
-
-fn timestamp_bytes(timestamp: i32, endianness: Endianness) -> [u8; 4] {
-    let v = timestamp as u32;
-    match endianness {
-        Endianness::Little => v.to_le_bytes(),
-        Endianness::Big => v.to_be_bytes(),
-    }
 }
 
 fn detect_archive(bytes: &[u8]) -> Result<(ArchiveKind, Endianness)> {
@@ -323,11 +316,17 @@ fn extract_archive_to_dir(
     Ok(out)
 }
 
-fn repack_to_sharc(extracted: &[ExtractedEntry], endianness: Endianness) -> Result<(Vec<u8>, i32)> {
+fn repack_to_sharc(
+    extracted: &mut [ExtractedEntry],
+    endianness: Endianness,
+) -> Result<(Vec<u8>, i32)> {
     let mut out = Cursor::new(Vec::<u8>::new());
     let mut w = SharcWriter::new(&mut out, SHARC_SDAT_KEY, endianness)
         .context("create SHARC")?
         .with_flags(ArchiveFlags::Protected.into());
+
+    // Sort entries by name hash to ensure consistent ordering.
+    extracted.sort_by_key(|e| e.name_hash.0);
 
     for entry in extracted {
         if BAD_FILES.contains(&entry.name_hash) {

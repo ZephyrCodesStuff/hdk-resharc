@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write # Required for GitHub Actions to create the release
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_name: hdk-resharc-win-x86.exe
+            ext: .exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin_name: hdk-resharc-mac-arm64
+            ext: ''
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_name: hdk-resharc-linux-x86
+            ext: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # We force bash on all runners so the `mv` command works universally
+      - name: Rename binary
+        shell: bash
+        run: mv target/${{ matrix.target }}/release/hdk-resharc${{ matrix.ext }} ${{ matrix.bin_name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.bin_name }}
+          path: ${{ matrix.bin_name }}
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch git history for the commit message
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Get latest commit message
+        id: commit_msg
+        run: |
+          # Grabs the last commit message and handles multi-line outputs safely
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "msg<<$EOF" >> $GITHUB_OUTPUT
+          git log -1 --pretty=%B >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
+          # expose short SHA for use in the release name/tag
+          echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # create a release/tag that points at the pushed commit (no pre-existing tag required)
+          tag_name: release-${{ steps.commit_msg.outputs.short_sha }}
+          target_commitish: ${{ github.sha }}
+          name: "🔖 Release #${{ steps.commit_msg.outputs.short_sha }}"
+          body: ${{ steps.commit_msg.outputs.msg }}
+          files: |
+            artifacts/hdk-resharc-win-x86.exe
+            artifacts/hdk-resharc-mac-arm64
+            artifacts/hdk-resharc-linux-x86
