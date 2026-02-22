@@ -151,7 +151,7 @@ fn normalize_one(input_sdat_path: &Path, sdat_keys: &SdatKeys) -> Result<()> {
 
     // 4) Repack extracted files into a SHARC archive
     let (sharc_bytes, sharc_timestamp) =
-        repack_to_sharc(&extracted, endianness).context("repack to SHARC")?;
+        repack_to_sharc(&extracted, Endianness::Big).context("repack to SHARC")?;
 
     // 5) Repack SHARC -> SDAT
     let output_name = input_sdat_path
