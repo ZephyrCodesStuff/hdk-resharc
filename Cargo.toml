@@ -11,3 +11,5 @@ hdk-secure = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
 anyhow = "1.0"
 tempfile = "3.10"
 chrono = "0.4.43"
+binrw = { version = "0.15.0", default-features = false }
+rand = "0.10.0"

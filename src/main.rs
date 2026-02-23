@@ -1,25 +1,21 @@
 use std::ffi::OsString;
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use binrw::BinRead;
 use chrono::{DateTime, Utc};
 
-use hdk_archive::archive::ArchiveReader;
-use hdk_archive::bar::BarReader;
-use hdk_archive::sharc::reader::SharcReader;
-use hdk_archive::sharc::writer::SharcWriter;
-use hdk_archive::structs::{ARCHIVE_MAGIC, ArchiveFlags, CompressionType, Endianness};
+use hdk_archive::bar::structs::BarArchive;
+use hdk_archive::sharc::builder::SharcBuilder;
+use hdk_archive::sharc::structs::SharcArchive;
+use hdk_archive::structs::{
+    ARCHIVE_MAGIC, ArchiveFlags, ArchiveFlagsValue, CompressionType, Endianness,
+};
 use hdk_sdat::{SdatKeys, SdatReader, SdatWriter};
 use hdk_secure::hash::AfsHash;
-
-// Encrypts the header and the entries.
-// Used in core SHARC archives.
-const SHARC_DEFAULT_KEY: [u8; 32] = [
-    0x2F, 0x5C, 0xED, 0xA6, 0x3A, 0x9A, 0x67, 0x2C, 0x03, 0x4C, 0x12, 0xE1, 0xE4, 0x25, 0xFA, 0x81,
-    0x16, 0x16, 0xAE, 0x1C, 0xE6, 0x6D, 0xEB, 0x95, 0xB7, 0xE6, 0xBF, 0x21, 0x40, 0x47, 0x02, 0xDC,
-];
+use rand::RngExt;
 
 // Encrypts the header and the entries.
 // Used for SHARC archives embedded in SDAT files.
@@ -73,6 +69,9 @@ const SDAT_KEYS: hdk_sdat::SdatKeys = hdk_sdat::SdatKeys {
         0x97,
     ],
 };
+
+/// Files key to encrypt files with in SHARC
+const SHARC_FILES_KEY: [u8; 16] = *b"hdk_resharc_file";
 
 /// Any file in here will not be included in the repacked SHARC.
 #[allow(overflowing_literals)]
@@ -152,7 +151,7 @@ fn normalize_one(input_sdat_path: &Path, sdat_keys: &SdatKeys) -> Result<()> {
 
     // 4) Repack extracted files into a SHARC archive
     let (sharc_bytes, sharc_timestamp) =
-        repack_to_sharc(&mut extracted, Endianness::Big).context("repack to SHARC")?;
+        repack_to_sharc(&mut extracted, endianness).context("repack to SHARC")?;
 
     // 5) Repack SHARC -> SDAT
     let output_name = input_sdat_path
@@ -241,38 +240,42 @@ fn extract_archive_to_dir(
     out_dir: &Path,
 ) -> Result<Vec<ExtractedEntry>> {
     let mut out = Vec::new();
+    let mut cursor = Cursor::new(archive_bytes);
 
     match kind {
         ArchiveKind::Bar => {
-            let mut reader = BarReader::open(
-                Cursor::new(archive_bytes),
-                BAR_DEFAULT_KEY,
-                BAR_SIGNATURE_KEY,
-                Some(endianness),
-            )
+            let reader = match endianness {
+                Endianness::Little => BarArchive::read_le_args(
+                    &mut cursor,
+                    (
+                        BAR_DEFAULT_KEY,
+                        BAR_SIGNATURE_KEY,
+                        archive_bytes.len() as u32,
+                    ),
+                ),
+                Endianness::Big => BarArchive::read_be_args(
+                    &mut cursor,
+                    (
+                        BAR_DEFAULT_KEY,
+                        BAR_SIGNATURE_KEY,
+                        archive_bytes.len() as u32,
+                    ),
+                ),
+            }
             .context("open BAR")?;
 
-            let entries: Vec<_> = reader
-                .entries()
-                .enumerate()
-                .map(|(i, res)| res.map(|meta| (i, meta)))
-                .collect::<Result<Vec<_>, _>>()
-                .context("read BAR entries")?;
+            for entry in &reader.entries {
+                let data = reader
+                    .entry_data(&mut cursor, entry, &BAR_DEFAULT_KEY, &BAR_SIGNATURE_KEY)
+                    .context("read BAR entry data")?;
 
-            for (i, meta) in entries {
-                let mut entry_reader = reader.entry_reader(i).context("open BAR entry")?;
-                let mut data = Vec::new();
-                entry_reader
-                    .read_to_end(&mut data)
-                    .context("read BAR entry bytes")?;
-
-                let file_name = format!("{i:05}_{}.bin", meta.name_hash);
+                let file_name = entry.name_hash.to_string();
                 let extracted_path = out_dir.join(file_name);
                 fs::write(&extracted_path, &data).context("write extracted file")?;
 
                 out.push(ExtractedEntry {
-                    name_hash: meta.name_hash,
-                    compression: meta.compression,
+                    name_hash: entry.name_hash,
+                    compression: entry.location.1,
                     extracted_path,
                 });
             }
@@ -280,32 +283,30 @@ fn extract_archive_to_dir(
 
         ArchiveKind::Sharc => {
             // Prefer the SDAT-embedded key first, then fall back to the core key.
-            let reader_res = SharcReader::open(Cursor::new(archive_bytes), SHARC_SDAT_KEY)
-                .or_else(|_| SharcReader::open(Cursor::new(archive_bytes), SHARC_DEFAULT_KEY));
-            let mut reader = reader_res.context("open SHARC")?;
+            let reader = match endianness {
+                Endianness::Little => SharcArchive::read_le_args(
+                    &mut cursor,
+                    (SHARC_SDAT_KEY, archive_bytes.len() as u32),
+                ),
+                Endianness::Big => SharcArchive::read_be_args(
+                    &mut cursor,
+                    (SHARC_SDAT_KEY, archive_bytes.len() as u32),
+                ),
+            }
+            .context("open SHARC with SDAT key")?;
 
-            let entries: Vec<_> = reader
-                .entries()
-                .enumerate()
-                .map(|(i, res)| res.map(|meta| (i, meta)))
-                .collect::<Result<Vec<_>, _>>()
-                .context("read SHARC entries")?;
+            for entry in &reader.entries {
+                let data = reader.entry_data(&mut cursor, entry)?;
 
-            for (i, meta) in entries {
-                let mut entry_reader = reader.entry_reader(i).context("open SHARC entry")?;
-                let mut data = Vec::new();
-                entry_reader
-                    .read_to_end(&mut data)
-                    .context("read SHARC entry bytes")?;
-
-                let file_name = format!("{i:05}_{}.bin", meta.name_hash);
+                let file_name = entry.name_hash.to_string();
                 let extracted_path = out_dir.join(file_name);
                 fs::write(&extracted_path, &data).context("write extracted file")?;
 
-                let compression = CompressionType::try_from(meta.compression_raw)
-                    .unwrap_or(CompressionType::None);
+                let compression =
+                    CompressionType::try_from(entry.location.1).unwrap_or(CompressionType::None);
+
                 out.push(ExtractedEntry {
-                    name_hash: meta.name_hash,
+                    name_hash: entry.name_hash,
                     compression,
                     extracted_path,
                 });
@@ -320,10 +321,11 @@ fn repack_to_sharc(
     extracted: &mut [ExtractedEntry],
     endianness: Endianness,
 ) -> Result<(Vec<u8>, i32)> {
-    let mut out = Cursor::new(Vec::<u8>::new());
-    let mut w = SharcWriter::new(&mut out, SHARC_SDAT_KEY, endianness)
-        .context("create SHARC")?
-        .with_flags(ArchiveFlags::Protected.into());
+    let timestamp = chrono::Utc::now().timestamp() as i32;
+
+    let mut w = SharcBuilder::new(SHARC_SDAT_KEY, SHARC_FILES_KEY)
+        .with_flags(ArchiveFlags(ArchiveFlagsValue::Protected.into()))
+        .with_timestamp(timestamp);
 
     // Sort entries by name hash to ensure consistent ordering.
     extracted.sort_by_key(|e| e.name_hash.0);
@@ -339,22 +341,28 @@ fn repack_to_sharc(
             continue;
         }
 
-        let mut f = fs::File::open(&entry.extracted_path)
-            .with_context(|| format!("open {}", entry.extracted_path.display()))?;
-        w.add_entry_from_reader(entry.name_hash, entry.compression, &mut f)
-            .with_context(|| format!("add SHARC entry {}", entry.name_hash))?;
+        let data = std::fs::read(&entry.extracted_path)
+            .with_context(|| format!("read extracted file {}", entry.extracted_path.display()))?;
+
+        let mut iv: [u8; 8] = [0; 8];
+        let mut rng = rand::rng();
+        rng.fill(&mut iv);
+
+        w.add_entry(entry.name_hash, data, entry.compression, iv);
     }
 
     println!(
         "New SHARC timestamp: {:X} ({})",
-        w.timestamp,
-        DateTime::<Utc>::from_timestamp(w.timestamp as i64, 0)
+        timestamp,
+        DateTime::<Utc>::from_timestamp(timestamp as i64, 0)
             .map(|t| t.format("%Y-%m-%d %H:%M:%S UTC").to_string())
             .unwrap_or_else(|| "invalid timestamp".to_string())
     );
 
-    let timestamp = w.timestamp;
+    let mut writer = Cursor::new(Vec::<u8>::new());
 
-    let out = w.finish().context("finish SHARC")?;
-    Ok((out.get_ref().clone(), timestamp))
+    w.build(&mut writer, endianness.into())
+        .context("finish SHARC")?;
+
+    Ok((writer.into_inner(), timestamp))
 }
