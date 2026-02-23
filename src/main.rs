@@ -302,12 +302,9 @@ fn extract_archive_to_dir(
                 let extracted_path = out_dir.join(file_name);
                 fs::write(&extracted_path, &data).context("write extracted file")?;
 
-                let compression =
-                    CompressionType::try_from(entry.location.1).unwrap_or(CompressionType::None);
-
                 out.push(ExtractedEntry {
                     name_hash: entry.name_hash,
-                    compression,
+                    compression: entry.location.1,
                     extracted_path,
                 });
             }
