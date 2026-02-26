@@ -3,6 +3,10 @@ name = "hdk-resharc"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+rayon = ["hdk-archive/rayon"]
+isal = ["hdk-archive/isal"]
+
 [dependencies]
 hdk-archive = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
 hdk-sdat = { git = "https://github.com/ZephyrCodesStuff/hdk-rs" }
