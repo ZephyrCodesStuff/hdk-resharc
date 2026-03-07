@@ -37,8 +37,22 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+      # Install NASM for ISA-L build
+      - name: Install dependencies (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+      
+      - name: Build release (Windows and macOS, no ISA-L support)
+        if: matrix.os != 'ubuntu-latest'
+        shell: bash
+        run: cargo build --release --target ${{ matrix.target }} --features rayon
+      
+      - name: Build release (Linux, ISA-L support)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: cargo build --release --target ${{ matrix.target }} --all-features
 
       # We force bash on all runners so the `mv` command works universally
       - name: Rename binary
